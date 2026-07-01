@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, ShoppingCart, Book, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { twMerge } from 'tailwind-merge';
-import { useTheme } from '../../context/ThemeContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import ThemeToggle from '../common/ThemeToggle';
@@ -11,7 +10,6 @@ import ThemeToggle from '../common/ThemeToggle';
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const { theme } = useTheme();
   const { totalItems } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
   const location = useLocation();
@@ -39,7 +37,9 @@ const Header = () => {
   const navigation = [
     { name: 'Home', href: '/' },
     { name: 'Books', href: '/books' },
+    { name: 'Blog', href: '/blog' },
     { name: 'About', href: '/about' },
+    { name: 'Contact', href: '/contact' },
   ];
 
   return (
@@ -58,8 +58,8 @@ const Header = () => {
             size={28} 
             className="text-primary-600 dark:text-primary-400" 
           />
-          <span className="text-xl font-heading font-bold text-primary-700 dark:text-primary-300">
-            kellyinkspired
+          <span className="text-xl font-heading font-bold text-gradient">
+            KellyInkspired
           </span>
         </Link>
 

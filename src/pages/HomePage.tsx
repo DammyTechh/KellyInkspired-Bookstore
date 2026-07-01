@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Hero from '../components/home/Hero';
 import FeaturedBooks from '../components/home/FeaturedBooks';
+import ComingSoon from '../components/home/ComingSoon';
 import AuthorSection from '../components/home/AuthorSection';
 import Testimonials from '../components/home/Testimonials';
 import CTASection from '../components/common/CTASection';
@@ -23,6 +24,7 @@ const HomePage = () => {
     >
       <Hero />
       <FeaturedBooks />
+      <ComingSoon />
       <AuthorSection />
       <Testimonials />
       <CTASection />

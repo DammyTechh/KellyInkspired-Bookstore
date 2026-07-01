@@ -1,161 +1,99 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search } from 'lucide-react';
+import { Search, BookOpen } from 'lucide-react';
 import BookCard from '../components/books/BookCard';
-import { Book } from '../types';
+import { getPublishedBooks } from '../lib/api';
 import { supabase } from '../lib/supabaseClient';
+import type { Book } from '../types';
 
 const BooksPage = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [categories, setCategories] = useState<string[]>(['all']);
+
+  const load = () =>
+    getPublishedBooks()
+      .then(setBooks)
+      .catch(() => setBooks([]))
+      .finally(() => setLoading(false));
 
   useEffect(() => {
     document.title = 'Books | KellyInkspired';
     window.scrollTo(0, 0);
-    
-    // Subscribe to real-time updates
+    load();
+
     const subscription = supabase
       .channel('books_channel')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'books' 
-      }, payload => {
-        if (payload.eventType === 'INSERT') {
-          setBooks(prev => [...prev, payload.new as Book]);
-        } else if (payload.eventType === 'DELETE') {
-          setBooks(prev => prev.filter(book => book.id !== payload.old.id));
-        } else if (payload.eventType === 'UPDATE') {
-          setBooks(prev => prev.map(book => 
-            book.id === payload.new.id ? payload.new as Book : book
-          ));
-        }
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'books' }, () => load())
       .subscribe();
 
-    // Initial fetch
-    fetchBooks();
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => { subscription.unsubscribe(); };
   }, []);
 
-  const fetchBooks = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('books')
-        .select('*')
-        .order('created_at', { ascending: false });
+  const categories = useMemo(() => {
+    const set = new Set(books.map((b) => b.details.category).filter(Boolean));
+    return ['all', ...Array.from(set)];
+  }, [books]);
 
-      if (error) throw error;
-
-      setBooks(data || []);
-      // Extract unique categories
-      const uniqueCategories = ['all', ...new Set(data?.map(book => book.details.category) || [])];
-      setCategories(uniqueCategories);
-    } catch (error) {
-      console.error('Error fetching books:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredBooks = books.filter(book => {
-    const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         book.description.toLowerCase().includes(searchQuery.toLowerCase());
+  const filtered = books.filter((book) => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = book.title.toLowerCase().includes(q) || book.description.toLowerCase().includes(q);
     const matchesCategory = selectedCategory === 'all' || book.details.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  if (loading) {
-    return (
-      <div className="pt-12 pb-20">
-        <div className="container-custom">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3, 4, 5, 6].map((index) => (
-              <div key={index} className="animate-pulse">
-                <div className="bg-gray-200 dark:bg-gray-700 h-64 rounded-lg mb-4"></div>
-                <div className="space-y-3">
-                  <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.5 }}
-      className="pt-12 pb-20"
-    >
-      {/* Header Banner */}
-      <div className="bg-primary-700 dark:bg-primary-800 text-white py-12 mb-12">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="pb-20">
+      {/* Banner */}
+      <div className="bg-cream-100 dark:bg-gray-800 pt-28 pb-12 mb-12">
         <div className="container-custom">
           <h1 className="text-3xl md:text-4xl font-heading font-bold mb-4">
-            Explore Our Books
+            Explore Our <span className="text-gradient">Books</span>
           </h1>
-          <p className="text-lg text-gray-100 max-w-2xl">
-            Discover Awokunle M. Kelechi's collection of transformative books that inspire 
+          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl">
+            Awokunle M. Kelechi's collection of transformative books that inspire
             faith, purpose, and spiritual growth.
           </p>
         </div>
       </div>
-      
+
       <div className="container-custom">
-        {/* Search and Filter */}
+        {/* Search + filter */}
         <div className="mb-8 flex flex-col md:flex-row gap-4">
           <div className="flex-grow relative">
-            <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400" />
+            <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
-              type="text"
-              placeholder="Search books..."
-              value={searchQuery}
+              type="text" placeholder="Search books..." value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-400 dark:focus:ring-primary-600"
+              className="input pl-10"
             />
           </div>
-          
-          <div>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="pl-4 pr-8 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-400 dark:focus:ring-primary-600"
-            >
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category === 'all' ? 'All Categories' : category}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="input md:w-56">
+            {categories.map((c) => (
+              <option key={c} value={c}>{c === 'all' ? 'All Categories' : c}</option>
+            ))}
+          </select>
         </div>
-        
-        {/* Books Grid */}
-        {filteredBooks.length > 0 ? (
+
+        {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredBooks.map((book, index) => (
-              <BookCard key={book.id} book={book} index={index} />
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="card h-96 animate-pulse bg-gray-100 dark:bg-gray-800" />
             ))}
           </div>
+        ) : filtered.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filtered.map((book, i) => <BookCard key={book.id} book={book} index={i} />)}
+          </div>
         ) : (
-          <div className="text-center py-12">
-            <h3 className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-4">
-              No books found
+          <div className="text-center py-16">
+            <BookOpen className="mx-auto text-primary-400 mb-4" size={48} />
+            <h3 className="text-xl font-medium mb-2">
+              {books.length === 0 ? 'No books available yet' : 'No books found'}
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
-              Try adjusting your search or filter to find what you're looking for.
+              {books.length === 0 ? 'New titles are on the way. Stay tuned!' : 'Try adjusting your search or filter.'}
             </p>
           </div>
         )}

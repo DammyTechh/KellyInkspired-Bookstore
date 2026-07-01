@@ -1,65 +1,100 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 import { User } from '../types';
- 
+
 type AuthContextType = {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  loading: boolean;
+  /** Customer passwordless flow: send a one-time code to the email. */
+  requestOtp: (email: string, name?: string) => Promise<void>;
+  /** Customer passwordless flow: verify the emailed code. */
+  verifyOtp: (email: string, token: string) => Promise<void>;
+  /** Admin only — seeded accounts sign in with email + password. */
+  adminLogin: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const loadProfile = async (id: string, email: string) => {
+    const { data } = await supabase
+      .from('profiles').select('full_name, role').eq('id', id).maybeSingle();
+    setUser({
+      id,
+      email,
+      name: data?.full_name ?? email.split('@')[0],
+      role: (data?.role as 'customer' | 'admin') ?? 'customer',
+    });
+  };
 
   useEffect(() => {
-    // Check if user is logged in on component mount
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-      setIsAuthenticated(true);
-    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        loadProfile(session.user.id, session.user.email ?? '');
+      }
+      setLoading(false);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        loadProfile(session.user.id, session.user.email ?? '');
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    // In a real app, this would be an API call
-    // For demo purposes, we're simulating a successful login
-    const mockUser: User = {
-      id: '1',
-      name: 'Test User',
-      email
-    };
-
-    localStorage.setItem('user', JSON.stringify(mockUser));
-    setUser(mockUser);
-    setIsAuthenticated(true);
+  const requestOtp = async (email: string, name?: string) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        data: name ? { full_name: name } : undefined,
+      },
+    });
+    if (error) throw error;
   };
 
-  const register = async (name: string, email: string, password: string) => {
-    // In a real app, this would be an API call
-    // For demo purposes, we're simulating a successful registration
-    const mockUser: User = {
-      id: '1',
-      name,
-      email
-    };
-
-    localStorage.setItem('user', JSON.stringify(mockUser));
-    setUser(mockUser);
-    setIsAuthenticated(true);
+  const verifyOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+    if (error) throw error;
   };
 
-  const logout = () => {
-    localStorage.removeItem('user');
+  const adminLogin = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    const { data: prof } = await supabase
+      .from('profiles').select('role').eq('id', data.user.id).maybeSingle();
+    if (prof?.role !== 'admin') {
+      await supabase.auth.signOut();
+      throw new Error('This account does not have admin access.');
+    }
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    setIsAuthenticated(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        loading,
+        requestOtp,
+        verifyOtp,
+        adminLogin,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

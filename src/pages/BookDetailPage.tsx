@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BookOpen, Calendar, Languages as Language, Tag, ShoppingCart } from 'lucide-react';
-import { getBookById } from '../data/books';
+import { ArrowLeft, BookOpen, Calendar, Languages as Language, Tag, ShoppingCart, Sparkles, Clock } from 'lucide-react';
+import { getBookById } from '../lib/api';
+import { formatNaira } from '../lib/supabaseClient';
 import { Book, CartItem } from '../types';
 import { useCart } from '../context/CartContext';
 
@@ -15,53 +16,33 @@ const BookDetailPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Scroll to top on component mount
     window.scrollTo(0, 0);
-    
-    if (id) {
-      const foundBook = getBookById(id);
-      setBook(foundBook || null);
-      
-      if (foundBook) {
-        document.title = `${foundBook.title} | KellyInkspired`;
-      } else {
-        document.title = 'Book Not Found | KellyInkspired';
-      }
-    }
-    
-    setLoading(false);
+    if (!id) return;
+    setLoading(true);
+    getBookById(id)
+      .then((b) => {
+        setBook(b);
+        document.title = b ? `${b.title} | KellyInkspired` : 'Book Not Found | KellyInkspired';
+      })
+      .catch(() => setBook(null))
+      .finally(() => setLoading(false));
   }, [id]);
 
-  // Check if this book is already in the cart
-  const bookInCart = items.find(item => item.book.id === id) as CartItem | undefined;
+  const bookInCart = items.find((item) => item.book.id === id) as CartItem | undefined;
+  const isComingSoon = book?.status === 'coming_soon';
 
   const handleAddToCart = () => {
-    if (book) {
-      // Add the book to cart multiple times based on quantity
-      for (let i = 0; i < quantity; i++) {
-        addToCart(book);
-      }
-      
-      // Show a temporary success message or toast notification here
-      
-      // Reset quantity
-      setQuantity(1);
-    }
-  };
-
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    if (!isNaN(value) && value > 0) {
-      setQuantity(value);
-    }
+    if (!book) return;
+    for (let i = 0; i < quantity; i++) addToCart(book);
+    setQuantity(1);
   };
 
   if (loading) {
     return (
-      <div className="container-custom py-20 flex justify-center">
+      <div className="container-custom py-32 flex justify-center">
         <div className="animate-pulse flex flex-col items-center">
-          <div className="h-6 w-32 bg-gray-300 dark:bg-gray-700 rounded mb-4"></div>
-          <div className="h-4 w-48 bg-gray-200 dark:bg-gray-800 rounded"></div>
+          <div className="h-6 w-32 bg-gray-300 dark:bg-gray-700 rounded mb-4" />
+          <div className="h-4 w-48 bg-gray-200 dark:bg-gray-800 rounded" />
         </div>
       </div>
     );
@@ -69,162 +50,93 @@ const BookDetailPage = () => {
 
   if (!book) {
     return (
-      <div className="container-custom py-20 text-center">
-        <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">
-          Book Not Found
-        </h2>
+      <div className="container-custom py-32 text-center">
+        <h2 className="text-2xl font-bold mb-4">Book Not Found</h2>
         <p className="text-gray-600 dark:text-gray-400 mb-8">
           The book you're looking for does not exist or has been removed.
         </p>
-        <Link 
-          to="/books" 
-          className="btn btn-primary inline-flex items-center"
-        >
-          <ArrowLeft size={16} className="mr-2" />
-          Back to Books
+        <Link to="/books" className="btn btn-primary inline-flex items-center">
+          <ArrowLeft size={16} className="mr-2" /> Back to Books
         </Link>
       </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.5 }}
-      className="pt-12 pb-20"
-    >
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="pt-28 pb-20">
       <div className="container-custom">
-        {/* Navigation */}
-        <div className="mb-8">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-          >
-            <ArrowLeft size={16} className="mr-2" />
-            Back
-          </button>
-        </div>
-        
+        <button onClick={() => navigate(-1)} className="mb-8 inline-flex items-center text-gray-600 dark:text-gray-400 hover:text-primary-600">
+          <ArrowLeft size={16} className="mr-2" /> Back
+        </button>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Book Cover */}
-          <motion.div 
-            className="book-perspective max-w-md mx-auto md:mx-0"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <motion.div 
-              className="book-3d"
-              whileHover={{ rotateY: 25 }}
-              transition={{ type: "spring", stiffness: 100 }}
-            >
-              <img 
-                src={book.coverUrl} 
-                alt={book.title} 
-                className="w-full h-auto rounded-lg shadow-2xl"
-              />
-              
-              {/* Book spine/side effect */}
-              <div className="absolute top-0 left-0 w-10 h-full bg-gray-800 opacity-30 transform origin-left skew-y-12" />
-              
-              {/* Book highlight effect */}
-              <div className="absolute top-0 right-0 w-1/3 h-full bg-white opacity-10 rounded-r-lg" />
-            </motion.div>
-          </motion.div>
-          
-          {/* Book Details */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <h1 className="text-3xl md:text-4xl font-heading font-bold mb-4 text-gray-800 dark:text-gray-100">
-              {book.title}
-            </h1>
-            
-            <div className="flex items-center space-x-4 mb-6">
-              <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                ${book.price.toFixed(2)}
-              </span>
-              {book.featured && (
-                <span className="bg-accent-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                  Featured
-                </span>
+          {/* Cover */}
+          <motion.div className="book-perspective max-w-md mx-auto md:mx-0" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+            <div className="relative">
+              <img src={book.coverUrl} alt={book.title} className="w-full h-auto rounded-2xl shadow-2xl" />
+              {book.isNewRelease && (
+                <div className="absolute -top-4 -right-4 bg-accent-500 text-white text-sm font-bold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1">
+                  <Sparkles size={14} /> New
+                </div>
               )}
             </div>
-            
-            <p className="text-gray-700 dark:text-gray-300 mb-8 leading-relaxed">
-              {book.description}
-            </p>
-            
-            {/* Book Metadata */}
+          </motion.div>
+
+          {/* Details */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}>
+            <h1 className="text-3xl md:text-4xl font-heading font-bold mb-4">{book.title}</h1>
+
+            <div className="flex items-center gap-4 mb-6">
+              <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">{formatNaira(book.price)}</span>
+              {book.featured && <span className="badge badge-new">Featured</span>}
+              {isComingSoon && <span className="badge badge-soon flex items-center gap-1"><Clock size={13} /> Coming Soon</span>}
+            </div>
+
+            <p className="text-gray-700 dark:text-gray-300 mb-8 leading-relaxed whitespace-pre-line">{book.description}</p>
+
             <div className="grid grid-cols-2 gap-4 mb-8">
-              <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                <BookOpen size={18} className="text-primary-600 dark:text-primary-400" />
-                <span>{book.details.pages} pages</span>
+              <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                <BookOpen size={18} className="text-primary-500" /> <span>{book.details.pages} pages</span>
               </div>
-              <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                <Language size={18} className="text-primary-600 dark:text-primary-400" />
-                <span>{book.details.language}</span>
+              <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                <Language size={18} className="text-primary-500" /> <span>{book.details.language}</span>
               </div>
-              <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                <Calendar size={18} className="text-primary-600 dark:text-primary-400" />
-                <span>{new Date(book.releaseDate).toLocaleDateString()}</span>
+              <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                <Calendar size={18} className="text-primary-500" /> <span>{book.releaseDate ? new Date(book.releaseDate).toLocaleDateString('en-NG') : 'TBA'}</span>
               </div>
-              <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-                <Tag size={18} className="text-primary-600 dark:text-primary-400" />
-                <span>{book.details.category}</span>
-              </div>
-            </div>
-            
-            {/* Add to Cart Section */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-8">
-              <div className="relative w-24">
-                <input
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={handleQuantityChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-center bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
-                />
-                <div className="absolute inset-y-0 right-0 flex flex-col">
-                  <button 
-                    className="flex-1 px-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-tr-lg"
-                    onClick={() => setQuantity(prev => prev + 1)}
-                  >
-                    +
-                  </button>
-                  <button 
-                    className="flex-1 px-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-br-lg"
-                    onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
-                  >
-                    -
-                  </button>
+              {book.details.category && (
+                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Tag size={18} className="text-primary-500" /> <span>{book.details.category}</span>
                 </div>
+              )}
+            </div>
+
+            {isComingSoon ? (
+              <div className="rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 p-6 mb-8">
+                <p className="font-heading font-semibold text-lg mb-1 flex items-center gap-2">
+                  <Clock size={18} className="text-primary-500" /> Stay tuned
+                </p>
+                <p className="text-gray-600 dark:text-gray-400">
+                  This title is coming soon. Subscribe to our newsletter to be notified the moment it launches.
+                </p>
               </div>
-              
-              <button 
-                onClick={handleAddToCart}
-                className="btn bg-accent-500 hover:bg-accent-600 text-white py-3 px-8 rounded-lg flex items-center justify-center"
-              >
-                <ShoppingCart size={20} className="mr-2" />
-                {bookInCart ? 'Add More to Cart' : 'Add to Cart'}
-              </button>
-              
-              <Link
-                to="/checkout"
-                className="btn btn-primary py-3 px-8 rounded-lg"
-              >
-                Buy Now
-              </Link>
-            </div>
-            
-            {/* ISBN */}
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              ISBN: {book.details.isbn}
-            </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-4 mb-8">
+                <div className="flex items-center rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden w-fit">
+                  <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="px-4 py-2 bg-gray-100 dark:bg-gray-700">-</button>
+                  <span className="px-5 py-2 min-w-[3rem] text-center">{quantity}</span>
+                  <button onClick={() => setQuantity((q) => q + 1)} className="px-4 py-2 bg-gray-100 dark:bg-gray-700">+</button>
+                </div>
+                <button onClick={handleAddToCart} className="btn btn-accent py-3 px-8 flex items-center justify-center">
+                  <ShoppingCart size={20} className="mr-2" /> {bookInCart ? 'Add More' : 'Add to Cart'}
+                </button>
+                <Link to="/checkout" className="btn btn-primary py-3 px-8 flex items-center justify-center">Buy Now</Link>
+              </div>
+            )}
+
+            {book.details.isbn && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">ISBN: {book.details.isbn}</div>
+            )}
           </motion.div>
         </div>
       </div>
