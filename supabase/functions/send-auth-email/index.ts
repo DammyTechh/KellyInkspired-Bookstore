@@ -1,25 +1,20 @@
 // Supabase Auth "Send Email" hook (HTTPS type).
-// Renders our branded OTP template and delivers it through Resend, so customers
-// get a styled passwordless code instead of Supabase's default email.
+// Renders our branded OTP template and delivers it through Resend.
 //
 // Setup:
-//   1. Deploy:  supabase functions deploy send-auth-email
+//   1. Deploy WITHOUT jwt verification (the hook calls us with a signature,
+//      not a user token):
+//        supabase functions deploy send-auth-email --no-verify-jwt
 //   2. Auth -> Hooks -> Send Email hook -> HTTPS
 //        URL:    https://<project>.supabase.co/functions/v1/send-auth-email
-//        Secret: the value Supabase generates (starts with v1,whsec_...)
-//   3. Store that same secret so this function can verify the request:
+//        Secret: the value Supabase shows (starts with v1,whsec_...)
+//   3. Store that same secret so we can verify the request:
 //        supabase secrets set SEND_EMAIL_HOOK_SECRET="v1,whsec_xxxxx"
-//
-// The hook signs requests using the Standard Webhooks scheme. We verify the
-// signature when the secret is configured; if it isn't set, we skip verification
-// (handy for a first test, but set it for production).
+//      (If SEND_EMAIL_HOOK_SECRET is unset, verification is skipped — handy to
+//       isolate problems during first setup.)
 import { sendEmail, json, corsHeaders } from "../_shared/utils.ts";
 import { otpEmail } from "../_shared/email-templates.ts";
 
-// Verify a Standard Webhooks signature.
-// Header "webhook-signature" looks like: "v1,<base64sig> v1,<base64sig>"
-// Signed content is: `${id}.${timestamp}.${body}` using the base64 secret
-// (the part after "whsec_").
 async function verifySignature(
   secret: string, id: string, timestamp: string, body: string, sigHeader: string,
 ): Promise<boolean> {
@@ -32,12 +27,12 @@ async function verifySignature(
     const signed = `${id}.${timestamp}.${body}`;
     const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signed));
     const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
-    // The header may carry multiple space-separated signatures; accept any match.
     return sigHeader.split(" ").some((part) => {
       const value = part.includes(",") ? part.split(",")[1] : part;
       return value === expected;
     });
-  } catch {
+  } catch (e) {
+    console.error("signature verify threw:", String(e));
     return false;
   }
 }
@@ -53,21 +48,40 @@ Deno.serve(async (req) => {
       const ts = req.headers.get("webhook-timestamp") ?? "";
       const sig = req.headers.get("webhook-signature") ?? "";
       const ok = await verifySignature(secret, id, ts, raw, sig);
-      if (!ok) return json({ error: "Invalid signature" }, 401);
+      if (!ok) {
+        console.error("Signature check FAILED. Check SEND_EMAIL_HOOK_SECRET matches the hook's secret.");
+        return json({ error: "Invalid signature" }, 401);
+      }
+    } else {
+      console.log("No SEND_EMAIL_HOOK_SECRET set — skipping signature verification.");
     }
 
     const payload = JSON.parse(raw);
-    // Payload shape: { user, email_data: { token, token_hash, email_action_type, ... } }
     const email = payload?.user?.email;
     const token = payload?.email_data?.token;
-    if (!email || !token) return json({ error: "Invalid hook payload" }, 400);
+    console.log("hook invoked:", {
+      hasEmail: !!email,
+      hasToken: !!token,
+      action: payload?.email_data?.email_action_type,
+    });
+
+    if (!email || !token) {
+      console.error("Unexpected payload shape:", JSON.stringify(payload).slice(0, 500));
+      return json({ error: "Invalid hook payload" }, 400);
+    }
 
     const { subject, html } = otpEmail(token);
-    await sendEmail({ to: email, subject, html });
+    try {
+      await sendEmail({ to: email, subject, html });
+    } catch (e) {
+      console.error("Resend send FAILED:", String(e));
+      return json({ error: "Email send failed", detail: String(e) }, 500);
+    }
 
-    // Returning an empty object tells Auth the email was handled by us.
+    console.log("OTP email sent to", email);
     return json({});
   } catch (e) {
+    console.error("hook error:", String(e));
     return json({ error: String(e) }, 500);
   }
 });
