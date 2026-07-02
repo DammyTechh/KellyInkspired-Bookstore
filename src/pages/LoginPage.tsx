@@ -27,7 +27,7 @@ const LoginPage = () => {
       setIsLoading(true);
       await requestOtp(email);
       setStep('code');
-      setInfo(`We've sent a 6-digit code to ${email}.`);
+      setInfo(`We've sent a code to ${email}.`);
     } catch {
       setError('Could not send the code. Please check the email and try again.');
     } finally { setIsLoading(false); }
@@ -36,7 +36,7 @@ const LoginPage = () => {
   const confirmCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (code.length < 6) { setError('Enter the 6-digit code from your email'); return; }
+    if (code.length < 6) { setError('Enter the code from your email'); return; }
     try {
       setIsLoading(true);
       await verifyOtp(email, code);
@@ -102,13 +102,13 @@ const LoginPage = () => {
             <form onSubmit={confirmCode}>
               <div className="mb-6">
                 <label htmlFor="code" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  6-digit code
+                  Verification code
                 </label>
                 <input
-                  type="text" inputMode="numeric" maxLength={6} id="code" value={code}
+                  type="text" inputMode="numeric" maxLength={8} id="code" value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-4 py-3 text-center text-2xl tracking-[0.5em] rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-400"
-                  placeholder="••••••" required
+                  className="w-full px-4 py-3 text-center text-2xl tracking-[0.35em] rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 focus:border-primary-500 focus:ring-2 focus:ring-primary-400"
+                  placeholder="••••••••" required
                 />
               </div>
               <button type="submit" disabled={isLoading}

@@ -395,12 +395,13 @@ create policy "broadcasts: admin insert"
 -- ===========================================================================
 -- STORAGE BUCKETS  (covers + blog media are public; book files are private)
 -- ===========================================================================
-insert into storage.buckets (id, name, public)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
-  ('book-covers', 'book-covers', true),
-  ('blog-media',  'blog-media',  true),
-  ('book-files',  'book-files',  false)
-on conflict (id) do nothing;
+  ('book-covers', 'book-covers', true,  null, null),
+  ('blog-media',  'blog-media',  true,  null, null),
+  ('book-files',  'book-files',  false, null, null)
+on conflict (id) do update
+  set public = excluded.public, file_size_limit = null, allowed_mime_types = null;
 
 -- Public read for the public buckets
 drop policy if exists "storage: public read covers" on storage.objects;
