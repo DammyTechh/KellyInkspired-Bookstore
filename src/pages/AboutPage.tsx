@@ -41,7 +41,7 @@ const AboutPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-20">
           <motion.div className="relative" initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6 }}>
             <div className="relative z-10 rounded-2xl overflow-hidden shadow-xl">
-              <img src="https://imgur.com/rVDO2BX.png" alt="Awokunle M. Kelechi" className="w-full h-auto object-cover" />
+              <img src="https://imgur.com/erlnoGm.png" alt="Awokunle M. Kelechi" className="w-full h-auto object-cover" />
             </div>
             <div className="absolute -left-4 -bottom-4 w-full h-full border-2 border-primary-400 rounded-2xl z-0" />
             <div className="absolute top-4 -right-4 w-24 h-24 bg-accent-400/30 rounded-full z-0 blur-lg" />
