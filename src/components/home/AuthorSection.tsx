@@ -28,7 +28,7 @@ const AuthorSection = () => {
           >
             <div className="relative z-10 rounded-lg overflow-hidden shadow-xl">
               <img 
-                src="https://imgur.com/rVDO2BX.png" 
+                src="https://imgur.com/erlnoGm.png" 
                 alt="Awokunle M. Kelechi" 
                 className="w-full h-auto object-cover"
               />
