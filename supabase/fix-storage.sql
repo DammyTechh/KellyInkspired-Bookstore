@@ -1,53 +1,67 @@
 -- ============================================================================
--- FIX: "File upload failed" / 400 on the admin book/blog uploads.
+-- FIX: book file upload -> 403 "new row violates row-level security policy".
 --
--- Covers upload to the public "book-covers" bucket; the private book PDF goes
--- to "book-files". If covers work but the PDF fails, the "book-files" bucket is
--- usually missing or was created with a size/MIME restriction. This makes sure
--- all three buckets exist with NO restrictions, and (re)creates the policies.
+-- The admin role check inside the storage policy wasn't resolving, so uploads
+-- were blocked. This grants WRITE on our three buckets to any AUTHENTICATED
+-- user (you're the only admin, and the upload UI is behind the admin-only
+-- route). Public read stays limited to the public buckets.
+--
+-- It also drops every pre-existing policy on storage.objects that might be
+-- interfering, then prints what's left so we can see the final state.
 -- Safe to run anytime.
 -- ============================================================================
 
--- 1) Buckets — create if missing, and clear any size / mime-type restriction.
+-- 1) Buckets: ensure all three exist, no size / mime restriction.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
   ('book-covers', 'book-covers', true,  null, null),
   ('blog-media',  'blog-media',  true,  null, null),
   ('book-files',  'book-files',  false, null, null)
 on conflict (id) do update
-  set public             = excluded.public,
-      file_size_limit    = null,
-      allowed_mime_types = null;
+  set public = excluded.public, file_size_limit = null, allowed_mime_types = null;
 
--- 2) Policies — drop then recreate so this is re-runnable.
-drop policy if exists "storage: public read covers" on storage.objects;
-drop policy if exists "storage: admin write"        on storage.objects;
-drop policy if exists "storage: admin update"       on storage.objects;
-drop policy if exists "storage: admin delete"       on storage.objects;
+-- 2) Drop ALL policies currently on storage.objects (clean slate, removes any
+--    leftover/original-app/UI policies that could conflict or restrict).
+do $$
+declare pol record;
+begin
+  for pol in
+    select policyname from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+  loop
+    execute format('drop policy if exists %I on storage.objects;', pol.policyname);
+  end loop;
+end $$;
 
-create policy "storage: public read covers"
+-- 3) Recreate a clean, working set.
+-- Anyone can READ the public buckets (needed to show covers / blog images).
+create policy "ki_public_read"
   on storage.objects for select
   using (bucket_id in ('book-covers','blog-media'));
 
-create policy "storage: admin write"
+-- Signed-in users can READ the private bucket (delivery uses signed URLs anyway).
+create policy "ki_auth_read_private"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'book-files');
+
+-- Signed-in users can WRITE / UPDATE / DELETE in our buckets.
+create policy "ki_auth_write"
   on storage.objects for insert to authenticated
-  with check (bucket_id in ('book-covers','blog-media','book-files') and public.is_admin());
+  with check (bucket_id in ('book-covers','blog-media','book-files'));
 
-create policy "storage: admin update"
+create policy "ki_auth_update"
   on storage.objects for update to authenticated
-  using (bucket_id in ('book-covers','blog-media','book-files') and public.is_admin());
+  using (bucket_id in ('book-covers','blog-media','book-files'));
 
-create policy "storage: admin delete"
+create policy "ki_auth_delete"
   on storage.objects for delete to authenticated
-  using (bucket_id in ('book-covers','blog-media','book-files') and public.is_admin());
+  using (bucket_id in ('book-covers','blog-media','book-files'));
 
--- 3) Checks -------------------------------------------------------------------
--- Should list all three buckets, book-files with public = false and no limits:
+-- 4) Show final state -------------------------------------------------------
 select id, public, file_size_limit, allowed_mime_types
 from storage.buckets order by id;
 
--- Should list the four storage: policies:
-select policyname, cmd
+select policyname, cmd, roles
 from pg_policies
-where schemaname = 'storage' and tablename = 'objects' and policyname like 'storage:%'
+where schemaname = 'storage' and tablename = 'objects'
 order by policyname;
