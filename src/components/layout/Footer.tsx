@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, Instagram, Facebook, Mail, MessageCircle } from 'lucide-react';
+import {Instagram, Facebook, Mail, MessageCircle } from 'lucide-react';
 import { subscribeNewsletter } from '../../lib/api';
 
 const SOCIALS = {
@@ -125,11 +125,7 @@ const Footer = () => {
           <p className="text-gray-600 dark:text-gray-400 text-sm">
             &copy; {currentYear} KellyInkspired. All rights reserved.
           </p>
-          <div className="flex items-center text-gray-600 dark:text-gray-400 text-sm mt-4 md:mt-0">
-            <span>Made with</span>
-            <Heart size={14} className="mx-1 text-accent-500 fill-accent-500" />
-            <span>in Nigeria</span>
-          </div>
+         
         </div>
       </div>
     </footer>
